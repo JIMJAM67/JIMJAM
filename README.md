@@ -250,8 +250,29 @@ fprintf('----------------------------------\n');
 fprintf('\nBus\tVoltage(pu)\tAngle(deg)\n');
 for i = 1:n
     fprintf('%d\t%8.4f\t%8.4f\n',i,V(i),rad2deg(delta(i)));
+Inertia constant,\n
+M (pu) = H/(180f)
+Pre-fault:
+Pe1=Pmax1sin δo
+During fault:
+Pe2=Pmax2sin δ
+Postfault:
+Pe3=Pmax3sin δ
+Cos δcr=( Pm(δmax – δ0) + P3max Cos δmax - P2max Cos δo ) / ( P3max –P2max)
+Tcr = √ [ 2H (δcr – δo) / (πfoPm)]
 end
 ```
+
+Inertia constant,\n
+M (pu) = H/(180f)
+Pre-fault:
+Pe1=Pmax1sin δo
+During fault:
+Pe2=Pmax2sin δ
+Postfault:
+Pe3=Pmax3sin δ
+Cos δcr=( Pm(δmax – δ0) + P3max Cos δmax - P2max Cos δo ) / ( P3max –P2max)
+Tcr = √ [ 2H (δcr – δo) / (πfoPm)]
 
 ## 4. Symmetrical and Unsymmetrical Fault Analysis
 
