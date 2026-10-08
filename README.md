@@ -1,620 +1,210 @@
-# Power System Programs
+# Three MATLAB Models: Code and LaTeX Formulae
 
-## 1. Y-Bus and Z-Bus Formation
+---
 
-```matlab
-clc;
-clear;
+## 1. Solar PV Module (Single-Diode Model)
 
-n = input('Enter the number of buses: ');
-
-for i = 1:n
-    for j = 1:n
-        if(i == j)
-            y(i,j) = 0;
-            a(i,j) = 0;
-        else
-            fprintf('Between Bus %d and Bus %d\n', i, j);
-
-            z(i,j) = input('Enter self impedance: ');
-
-            if(z(i,j) == 0)
-                y(i,j) = 0;
-            else
-                y(i,j) = 1/z(i,j);
-            end
-
-            a(i,j) = input('Enter half line charging admittance: ');
-        end
-    end
-end
-
-for i = 1:n
-    for j = 1:n
-        if(i == j)
-            R(i,j) = 0;
-
-            for k = 1:n
-                R(i,j) = R(i,j) + y(i,k) + a(i,k);
-            end
-
-        else
-            R(i,j) = -y(i,j);
-        end
-    end
-end
-
-disp('The resultant Y-Bus Matrix is');
-
-R
-
-disp('The resultant Z-Bus Matrix is');
-
-Z = inv(R)
-```
-
-## 2. Y-Bus Formation and Gauss-Seidel Load Flow
-
-```matlab
-clc;
-clear;
-
-e = input('Enter the number of transmission lines: ');
-A = [];
-Y = zeros(e);
-maxBus = 0;
-
-for k = 1:e
-    fprintf('\nLine %d\n',k);
-    i = input('Enter the starting bus: ');
-    j = input('Enter the ending bus: ');
-    z = input('Enter the line impedance (R+jX): ');
-    maxBus = max([maxBus i j]);
-    A(k,maxBus) = 0;
-    A(k,i) = 1;
-    A(k,j) = -1;
-    Y(k,k) = 1/z;
-end
-
-Ybus = A' * Y * A;
-disp(' ');
-disp('Y-Bus Matrix');
-disp(Ybus);
-
-b = input('Enter number of buses: ');
-baseMVA = input('Enter Base MVA : ');
-P = zeros(b,1);
-Q = zeros(b,1);
-
-for i = 2:b
-    fprintf('\nBus %d\n',i);
-    Pg = input('Generator Power (MW): ');
-    Qg = input('Generator Reactive Power (MVAR): ');
-    Pl = input('Load Power (MW): ');
-    Ql = input('Load Reactive Power (MVAR): ');
-    P(i) = (Pg-Pl)/baseMVA;
-    Q(i) = (Qg-Ql)/baseMVA;
-end
-
-V = ones(b,1);
-Vm = input('Slack Bus Voltage Magnitude (pu): ');
-Va = input('Slack Bus Angle (deg): ');
-V(1) = Vm*exp(1i*Va*pi/180);
-acc = input('Acceleration Factor (1.0 to 1.8): ');
-
-for i = 2:b
-    Vm = input(['Initial Voltage Magnitude of Bus ',num2str(i),' : ']);
-    Va = input(['Initial Voltage Angle of Bus ',num2str(i),' : ']);
-    V(i) = Vm*exp(1i*Va*pi/180);
-end
-
-tol = input('Enter tolerance (e.g. 1e-6): ');
-maxIter = input('Enter maximum iterations: ');
-fprintf('\nIteration\tMaximum Voltage Change\n');
-
-for iter = 1:maxIter
-    Vold = V;
-    for i = 2:b
-        sumYV = 0;
-        for j = 1:b
-            if j ~= i
-                sumYV = sumYV + Ybus(i,j)*V(j);
-            end
-        end
-        Vnew = (1/Ybus(i,i))*...
-               (((P(i)-1i*Q(i))/conj(V(i))) - sumYV);
-        V(i) = V(i) + acc*(Vnew - V(i));
-    end
-    err = max(abs(V-Vold));
-    fprintf('%d\t\t%.8f\n',iter,err);
-    if err < tol
-        fprintf('\nConverged in %d iterations.\n',iter);
-        break;
-    end
-end
-
-disp(' ');
-disp('Final Bus Voltages');
-for i = 1:b
-    fprintf('\nBus %d\n',i);
-    fprintf('Voltage Magnitude = %.4f pu\n',abs(V(i)));
-    fprintf('Voltage Angle = %.4f degrees\n',angle(V(i))*180/pi);
-end
-```
-
-## 3. Newton-Raphson Load Flow
-
-```matlab
-clc;
-clear;
-
-n = input('Enter the number of buses: ');
-
-yb = zeros(n,n);
-disp('Enter Y-Bus Matrix (Complex Values)');
-for i = 1:n
-    for j = i:n
-        yb(i,j) = input(['Ybus(',num2str(i),',',num2str(j),') = ']);
-        yb(j,i) = yb(i,j);
-    end
-end
-
-V = zeros(n,1);
-delta = zeros(n,1);
-Psp = zeros(n,1);
-Qsp = zeros(n,1);
-
-for i = 1:n
-    V(i) = input(['Voltage Magnitude of Bus ',num2str(i),' = ']);
-    delta(i) = deg2rad(input(['Voltage Angle (deg) of Bus ',num2str(i),' = ']));
-    Psp(i) = input(['Specified Real Power P(',num2str(i),') = ']);
-    Qsp(i) = input(['Specified Reactive Power Q(',num2str(i),') = ']);
-end
-
-G = real(yb);
-B = imag(yb);
-tol = 1e-6;
-maxIter = 20;
-
-for iter = 1:maxIter
-    P = zeros(n,1);
-    Q = zeros(n,1);
-    for i = 1:n
-        for j = 1:n
-            P(i) = P(i) + V(i)*V(j)*( ...
-                G(i,j)*cos(delta(i)-delta(j)) + ...
-                B(i,j)*sin(delta(i)-delta(j)));
-            Q(i) = Q(i) + V(i)*V(j)*( ...
-                G(i,j)*sin(delta(i)-delta(j)) - ...
-                B(i,j)*cos(delta(i)-delta(j)));
-        end
-    end
-
-    dP = Psp(2:n) - P(2:n);
-    dQ = Qsp(2:n) - Q(2:n);
-    mismatch = [dP; dQ];
-
-    fprintf('\nIteration %d\n',iter);
-    disp('Mismatch Vector');
-    disp(mismatch);
-
-    if max(abs(mismatch)) < tol
-        fprintf('\nConverged in %d iterations.\n',iter);
-        break;
-    end
-
-    J1 = zeros(n-1,n-1);
-    J2 = zeros(n-1,n-1);
-    J3 = zeros(n-1,n-1);
-    J4 = zeros(n-1,n-1);
-
-    for i = 2:n
-        for j = 2:n
-            if i == j
-                J1(i-1,j-1) = -Q(i) - B(i,i)*V(i)^2;
-                J2(i-1,j-1) = P(i)/V(i) + G(i,i)*V(i);
-                J3(i-1,j-1) = P(i) - G(i,i)*V(i)^2;
-                J4(i-1,j-1) = Q(i)/V(i) - B(i,i)*V(i);
-            else
-                angle = delta(i)-delta(j);
-                J1(i-1,j-1) = V(i)*V(j)*( ...
-                    G(i,j)*sin(angle) - ...
-                    B(i,j)*cos(angle));
-                J2(i-1,j-1) = V(i)*( ...
-                    G(i,j)*cos(angle) + ...
-                    B(i,j)*sin(angle));
-                J3(i-1,j-1) = -V(i)*V(j)*( ...
-                    G(i,j)*cos(angle) + ...
-                    B(i,j)*sin(angle));
-                J4(i-1,j-1) = V(i)*( ...
-                    G(i,j)*sin(angle) - ...
-                    B(i,j)*cos(angle));
-            end
-        end
-    end
-
-    J = [J1 J2;
-         J3 J4];
-
-    correction = J \ mismatch;
-    dDelta = correction(1:n-1);
-    dV = correction(n:end);
-
-    delta(2:n) = delta(2:n) + dDelta;
-    V(2:n) = V(2:n) + dV;
-end
-
-fprintf('\n----------------------------------\n');
-fprintf('FINAL RESULTS\n');
-fprintf('----------------------------------\n');
-fprintf('\nBus\tVoltage(pu)\tAngle(deg)\n');
-for i = 1:n
-    fprintf('%d\t%8.4f\t%8.4f\n',i,V(i),rad2deg(delta(i)));
-Inertia constant,\n
-M (pu) = H/(180f)
-Pre-fault:
-Pe1=Pmax1sin δo
-During fault:
-Pe2=Pmax2sin δ
-Postfault:
-Pe3=Pmax3sin δ
-Cos δcr=( Pm(δmax – δ0) + P3max Cos δmax - P2max Cos δo ) / ( P3max –P2max)
-Tcr = √ [ 2H (δcr – δo) / (πfoPm)]
-end
-```
-
-Inertia constant,\n
-M (pu) = H/(180f)
-Pre-fault:
-Pe1=Pmax1sin δo
-During fault:
-Pe2=Pmax2sin δ
-Postfault:
-Pe3=Pmax3sin δ
-Cos δcr=( Pm(δmax – δ0) + P3max Cos δmax - P2max Cos δo ) / ( P3max –P2max)
-Tcr = √ [ 2H (δcr – δo) / (πfoPm)]
-
-## 4. Symmetrical and Unsymmetrical Fault Analysis
-
-```matlab
-clc;
-clear;
-close all;
-
-j = 1i;
-vpf = 1 + 0j;
-
-Z1 = input('Enter the positive sequence impedance (p.u.) = ');
-Z1 = j * Z1;
-Z2 = input('Enter the negative sequence impedance (p.u.) = ');
-Z2 = j * Z2;
-Z0 = input('Enter the zero sequence impedance (p.u.) = ');
-Z0 = j * Z0;
-
-Zf = input('Enter the fault impedance (p.u.) = ');
-Zf = j * Zf;
-
-Ib = input('Enter the base current (A) = ');
-
-ft = menu('Fault Analysis', ...
-    'Three Phase Fault', ...
-    'LG Fault', ...
-    'LL Fault', ...
-    'LLG Fault');
-
-switch ft
-    case 1
-        If = vpf / (Z1 + Zf);
-    case 2
-        Ia1 = vpf / (Z1 + Z2 + Z0 + 3*Zf);
-        If = 3 * Ia1;
-    case 3
-        Ia1 = vpf / (Z1 + Z2 + Zf);
-        If = -j * sqrt(3) * Ia1;
-    case 4
-        Ia1 = vpf / (Z1 + (Z2 * (Z0 + 3*Zf)) / (Z2 + Z0 + 3*Zf));
-        Ia0 = -Ia1 * (Z2 / (Z2 + Z0 + 3*Zf));
-        If = 3 * Ia0;
-    otherwise
-        error('Invalid choice.');
-end
-
-fprintf('\n========== Fault Analysis Result ==========\n');
-fprintf('Fault Current (p.u.) = %.4f\n', abs(If));
-fprintf('Fault Current (Actual) = %.4f A\n', Ib * abs(If));
-fprintf('Fault Current Angle = %.2f degrees\n', rad2deg(angle(If)));
-```
-
-## 5. Daily Load Curve and Load Duration Curve (MW)
-
-```matlab
-clc;
-clear;
-close all;
-
-time = [0 6 10 12 16 20 24];
-load = [20 25 30 25 35 20];
-
-figure;
-stairs(time, [load load(end)], 'LineWidth', 2);
-xlabel('Time (hours)');
-ylabel('Load (MW)');
-title('Daily Load Curve');
-grid on;
-
-load_sorted = [35 30 25 20];
-duration = [4 2 8 10];
-
-cumulative_duration = [0 cumsum(duration)];
-
-figure;
-stairs(cumulative_duration, [load_sorted load_sorted(end)], ...
-    'LineWidth', 2);
-xlabel('Duration (hours)');
-ylabel('Load (MW)');
-title('Load Duration Curve');
-grid on;
-```
-
-## 6. Diversity Factor, Load Factor, Load and Load Duration Curves (kW)
-
-```matlab
-clc;
-clear;
-close all;
-
-time = [0 6 8 10 18 24];
-load = [100 250 450 300 100];
-
-A = 200;
-B = 100;
-C = 50;
-D = 100;
-
-sum_maximum_demand = A + B + C + D;
-station_maximum_demand = max(load);
-
-diversity_factor = sum_maximum_demand / station_maximum_demand;
-
-duration = [6 2 2 8 6];
-
-energy = sum(load .* duration);
-
-average_load = energy / 24;
-load_factor = (average_load / station_maximum_demand) * 100;
-
-fprintf('Diversity Factor = %.2f\n', diversity_factor);
-fprintf('Units Generated per Day = %.2f kWh/day\n', energy);
-fprintf('Load Factor = %.2f %%\n', load_factor);
-
-figure;
-stairs(time, [load load(end)], 'LineWidth', 2);
-xlabel('Time (hours)');
-ylabel('Load (kW)');
-title('Daily Load Curve');
-grid on;
-
-load_sorted = [450 300 250 100];
-duration_sorted = [2 8 2 12];
-
-cumulative_duration = [0 cumsum(duration_sorted)];
-
-figure;
-stairs(cumulative_duration, [load_sorted load_sorted(end)], ...
-    'LineWidth', 2);
-xlabel('Duration (hours)');
-ylabel('Load (kW)');
-title('Load Duration Curve');
-grid on;
-```
-
-## 7. Diversity Factor and Annual Load Factor
-
-```matlab
-clc;
-clear;
-close all;
-
-Industrial = 1500;
-Commercial = 750;
-Domestic_power = 100;
-Domestic_light = 450;
-
-station_maximum_demand = 2500;
-annual_energy = 45e6;
-
-sum_maximum_demand = Industrial + Commercial + ...
-                     Domestic_power + Domestic_light;
-
-diversity_factor = sum_maximum_demand / station_maximum_demand;
-
-annual_load_factor = (annual_energy / ...
-                     (station_maximum_demand * 8760)) * 100;
-
-fprintf('Diversity Factor = %.2f\n', diversity_factor);
-fprintf('Annual Load Factor = %.2f %%\n', annual_load_factor);
-```
-
-## 8. Economic Dispatch with Generator Limits
-
-```matlab
-clc;
-clear;
-
-pd = 925;
-
-a = [0.0045 0.0056 0.0079];
-b = [5.2 4.5 5.8];
-c = [500 640 820];
-
-B = 0;
-A = 0;
-
-pgmax = [450 350 225];
-pgmin = [250 200 125];
-
-for i=1:3
-    B = B + (b(i)/(2*a(i)));
-    A = A + (1/(2*a(i)));
-end
-
-lamda = (pd + B) / A;
-
-for i=1:3
-    pg(i) = (lamda - b(i)) / (2 * a(i));
-end
-
-pg
-
-for i=1:3
-    if pg(i)<pgmin(i)
-        pgn(i) = pgmin(i);
-        k=i;
-    elseif pg(i) > pgmax(i)
-        pgn(i) = pgmax(i);
-        k=i;
-    end
-end
-
-pgn
-
-pdnw = pd - pgn(k);
-
-Bn = 0;
-An = 0;
-
-for i=1:3
-    if i~= k
-        Bn = Bn + (b(i)/(2*a(i)));
-        An = An + (1/(2*a(i)));
-    end
-end
-
-lamdan = (pdnw + Bn) / An;
-
-for i = 1:3
-    if i ~= k
-        pgn(i) = (lamdan - b(i)) / (2 * a(i));
-    end
-end
-
-pgn
-```
-
-## 9. Economic Dispatch with Transmission Losses (Loss Coefficients)
+### Code
 
 ```matlab
 clc
-clear
 
-lambda=18;
-n=2;
-pd=100;
-a=[0.04 0.04];
-b=[16 12];
-c=[0 0];
+k = 1.38065e-23; q = 1.602e-19;
+Isc = 8.21; Voc = 32.9; Ki = 0.0032;
+Ns = 54; T = 298; Tn = 303;
+G = 1000; Gn = 1000;
+a = 2; Eg = 1.2;
+Rs = 0.221; Rp = 415.405;
 
-B=[0.001 -0.0005
-   -0.0005 0.0024];
+Vtn = Ns*k*Tn/q;
+Vt = Ns*k*T/q;
+I0n = Isc/(exp(Voc/(a*Vtn)) - 1);
+I0 = I0n*(Tn/T)^3*exp(q*Eg/(a*k)*(1/Tn - 1/T));
+Iph = G/Gn*(Isc + Ki*(T - Tn));
 
-delp=100;
-pg=[25 75];
+V = Voc:-0.1:0;
+I = zeros(size(V));
+Iprev = 0;
 
-while delp>0.001
-
-    pgprev=[100 100];
-    ppr=[100 100];
-
-    while ppr(1)>1
-
-        for i=1:n
-
-            if i==1
-                pg(i)=(lambda-b(i)-(2*lambda*B(i,i+1)*pg(i+1)))/(2*(a(i)+(lambda*B(i,i))));
-            else
-                pg(i)=(lambda-b(i)-(2*lambda*B(n,n-1)*pg(n-1)))/(2*(a(i)+(lambda*B(i,i))));
-            end
-
-            ppr(i)=pgprev(i)-pg(i);
-            pgprev(i)=pg(i);
-
-        end
-
-    end
-
-    pg
-
-    PG=0;
-
-    for i=1:n
-        PG=PG+pg(i);
-    end
-
-    for i=1:n
-        loss(i)=(B(i,i)*(pg(i)^2));
-    end
-
-    totalloss=2*pg(1)*pg(2)*B(1,2);
-
-    for i=1:n
-        totalloss=totalloss+loss(i);
-    end
-
-    delp=(pd+totalloss)-PG;
-
-    for i=1:n
-
-        if i==1
-            dop(i)=(a(i)+(B(i,i)*b(i))-(2*a(i)*B(i,i+1)*pg(i+1)))/(2*(a(i)+(lambda*B(i,i)))^2);
-        else
-            dop(i)=(a(i)+(B(i,i)*b(i))-(2*lambda*B(n,n-1)*pg(n-1)))/(2*(a(i)+(lambda*B(i,i)))^2);
-        end
-
-    end
-
-    deldeno=0;
-
-    for i=1:n
-        deldeno=deldeno+dop(i);
-    end
-
-    dellambda=delp/deldeno;
-    lambda=lambda+dellambda;
-
+for n = 1:numel(V)
+    I(n) = max(Iprev, 0);
+    x = V(n) + Iprev*Rs;
+    Iprev = Iph - I0*(exp(x/(a*Vt)) - 1) - x/Rp;
 end
 
-pg
-PG
-totalloss
-lambda
+plot(V, I, 'r', 'LineWidth', 2.5)
+xlabel('Voltage (V)')
+ylabel('Current (A)')
+
+figure
+plot(V, V.*I, 'k', 'LineWidth', 2.5)
+xlabel('Voltage (V)')
+ylabel('Power (W)')
 ```
 
-## 10. Full Load Average Production Cost (Unit Commitment Priority Order)
+### Formulae
+
+Thermal voltage (actual and nominal):
+
+$$V_t = \frac{N_s\,k\,T}{q}, \qquad V_{t,n} = \frac{N_s\,k\,T_n}{q}$$
+
+Nominal saturation current:
+
+$$I_{0,n} = \frac{I_{sc}}{\exp\left(\dfrac{V_{oc}}{a\,V_{t,n}}\right) - 1}$$
+
+Saturation current at temperature $T$:
+
+$$I_0 = I_{0,n}\left(\frac{T_n}{T}\right)^{3}\exp\left[\frac{q\,E_g}{a\,k}\left(\frac{1}{T_n} - \frac{1}{T}\right)\right]$$
+
+Photocurrent:
+
+$$I_{ph} = \frac{G}{G_n}\left[I_{sc} + K_i\,(T - T_n)\right]$$
+
+Terminal current (implicit):
+
+$$I = I_{ph} - I_0\left[\exp\left(\frac{V + I\,R_s}{a\,V_t}\right) - 1\right] - \frac{V + I\,R_s}{R_p}$$
+
+Power:
+
+$$P = V\,I$$
+
+Symbols: $k$ Boltzmann constant, $q$ electron charge, $N_s$ series cells, $a$ diode ideality factor, $E_g$ silicon band gap, $R_s$ series resistance, $R_p$ parallel resistance, $I_{sc}$ short-circuit current, $V_{oc}$ open-circuit voltage, $K_i$ current temperature coefficient, $G$ irradiance, $T$ temperature in kelvin.
+
+---
+
+## 2. PEM Fuel Cell Stack (Polarization Curve)
+
+### Code
 
 ```matlab
-n=3;
+clear; clc; close all
 
-a=[0.006 0.01 0.008];
+T = 310; pH2 = 1; pO2 = 1;
+A = 69.7; N = 24;
+z1 = -0.475; z3 = 7.6e-5; z4 = -1e-4;
+Rc = 0.00019; Rm = 0.2;
+B = 0.0171; Jmax = 1600;
 
-b=[7 8 6];
+I = 0.1:0.1:9.9;
+J = I/A;
 
-c=[600 400 500];
+E = 1.229 - 0.85e-3*(T - 298.15) + 1.31e-5*T*(log(pH2) + 0.5*log(pO2));
+cO2 = pO2/(5.08e6*exp(-498/T));
+z2 = 0.00286 + 0.0002*log(A) + 4.3e-5*log(cO2);
 
-pgmax=[400 300 500];
+Vact = -(z1 + z2*T + z3*T*log(cO2) + z4*T*log(I));
+Vohm = I*(Rm + Rc);
+Vcon = -B*log(1 - J/Jmax);
+V = N*(E - Vact - Vohm - Vcon);
 
-pgmin=[100 50 150];
+yyaxis left
+plot(I, V)
+ylabel('Voltage (V)')
+yyaxis right
+plot(I, V.*I)
+ylabel('Power (W)')
+xlabel('Current (A)')
+```
 
-k=[1.1 1.2 1.0];
+### Formulae
 
-for i=1:n
+Nernst voltage:
 
-    flapc(i)=(k(i)*(a(i)*pgmax(i)^2+b(i)*pgmax(i)+c(i)))/pgmax(i);
+$$E = 1.229 - 0.85\times10^{-3}\,(T - 298.15) + 1.31\times10^{-5}\,T\left[\ln p_{H_2} + 0.5\ln p_{O_2}\right]$$
 
+Oxygen concentration:
+
+$$c_{O_2} = \frac{p_{O_2}}{5.08\times10^{6}\,\exp\left(-498/T\right)}$$
+
+Activation coefficient:
+
+$$z_2 = 0.00286 + 0.0002\ln A + 4.3\times10^{-5}\ln c_{O_2}$$
+
+Activation loss:
+
+$$V_{act} = -\left[z_1 + z_2\,T + z_3\,T\ln c_{O_2} + z_4\,T\ln I\right]$$
+
+Ohmic loss:
+
+$$V_{ohm} = I\,(R_m + R_c)$$
+
+Current density:
+
+$$J = \frac{I}{A}$$
+
+Concentration loss:
+
+$$V_{con} = -B\ln\left(1 - \frac{J}{J_{max}}\right)$$
+
+Stack voltage:
+
+$$V = N\left(E - V_{act} - V_{ohm} - V_{con}\right)$$
+
+Stack power:
+
+$$P = V\,I$$
+
+Symbols: $T$ stack temperature in kelvin, $p_{H_2}$ and $p_{O_2}$ partial pressures in atm, $A$ cell active area, $N$ number of cells, $z_1$ to $z_4$ empirical activation coefficients, $R_m$ membrane resistance, $R_c$ contact resistance, $B$ concentration-loss constant, $J_{max}$ limiting current density.
+
+---
+
+## 3. Lead-Acid Battery (Charging Simulation)
+
+### Code
+
+```matlab
+clear; clc; close all
+
+I = 5;
+K = 0.8; D = 1e-5;
+Cap = 936; ns = 6;
+SOC0 = 0.2;
+t = 0:0.1:7;
+
+SOC = zeros(size(t));
+Vbat = zeros(size(t));
+s = SOC0;
+
+for n = 1:numel(t)
+    if I <= 0
+        Voc = (1.926 + 0.124*s)*ns;
+        R = (0.19 + 0.1037/(s - 0.14))*ns/Cap;
+    else
+        Voc = (2 + 0.148*s)*ns;
+        R = (0.758 + 0.1309/(1.06 - s))*ns/Cap;
+    end
+    s = SOC0 + (K*Voc*I - D*s*Cap)*t(n)/Cap;
+    SOC(n) = s;
+    Vbat(n) = Voc + I*R;
 end
 
-flapc
-
-[FLAPC,IX]=sort(flapc);
-
-unit=IX
+Vbat
+SOC
+plot(t, Vbat)
+figure
+plot(t, SOC)
 ```
+
+### Formulae
+
+Open-circuit voltage:
+
+$$V_{oc} = \begin{cases} n_s\,(2 + 0.148\,SOC), & I > 0 \\[4pt] n_s\,(1.926 + 0.124\,SOC), & I \le 0 \end{cases}$$
+
+Internal resistance:
+
+$$R = \frac{n_s}{C}\begin{cases} 0.758 + \dfrac{0.1309}{1.06 - SOC}, & I > 0 \\[8pt] 0.19 + \dfrac{0.1037}{SOC - 0.14}, & I \le 0 \end{cases}$$
+
+Net power:
+
+$$P_{net} = K\,V_{oc}\,I - D\,SOC\,C$$
+
+State of charge:
+
+$$SOC = SOC_0 + \frac{P_{net}\,t}{C}$$
+
+Terminal voltage:
+
+$$V_{bat} = V_{oc} + I\,R$$
+
+Symbols: $I$ battery current (positive charges), $K$ charging efficiency, $D$ self-discharge rate, $C$ capacity (`Cap` in the code), $n_s$ cells in series, $SOC_0$ initial state of charge, $t$ time.
